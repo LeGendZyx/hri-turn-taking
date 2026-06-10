@@ -1,0 +1,27 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Local data and generated outputs
+data/raw/*
+data/processed/*
+data/annotations/*
+outputs/*
+models/*
+logs/*
+
+!.gitkeep
+
+# Environment files
+.env
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

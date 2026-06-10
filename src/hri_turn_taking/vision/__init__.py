@@ -1,0 +1,1 @@
+"""Visual feature extraction utilities."""

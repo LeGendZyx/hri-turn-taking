@@ -1,0 +1,56 @@
+project:
+  name: predictive_turn_taking_hri
+  random_seed: 42
+
+data:
+  root_dir: data
+  raw_dir: data/raw
+  processed_dir: data/processed
+  annotations_dir: data/annotations
+
+audio:
+  sample_rate: 16000
+  mic_distance_m: 0.06
+  speed_of_sound_mps: 343.0
+  gcc_phat_interp: 16
+
+vision:
+  mouth_aspect_ratio_threshold: 0.20
+  gaze_confidence_threshold: 0.50
+
+fusion:
+  frame_rate_hz: 25
+  history_seconds: 2.0
+
+turn_taking:
+  trp_threshold: 0.65
+  silence_baseline_seconds: 1.5
+
+model:
+  type: random_forest
+  checkpoint_path: models/trp_baseline.joblib
+
+training:
+  dataset_path: data/processed/frame_features.csv
+  synthetic_dataset_path: data/processed/synthetic_turn_taking.csv
+  target_column: trp_label
+  model_type: random_forest
+  window_seconds: 2.0
+  test_size: 0.2
+  feature_columns:
+    - audio_vad
+    - active_speaker_count
+    - overlap_active
+    - dominant_doa_angle_deg
+    - mouth_aspect_ratio_max
+    - visual_vad_max
+    - gaze_to_robot_score
+    - head_yaw_abs_min_deg
+    - speaking_towards_robot
+    - silence_duration_s
+    - current_turn_duration_s
+    - recent_speaker_change
+
+runtime:
+  furhat_host: 127.0.0.1
+  furhat_port: 54321

@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hri-turn-taking"
+version = "0.1.0"
+description = "Hybrid multimodal framework for predictive turn-taking in multi-party HRI."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "Yixuan Zhuang" }
+]
+dependencies = [
+  "numpy>=1.26",
+  "scipy>=1.12",
+  "pandas>=2.2",
+  "scikit-learn>=1.4",
+  "joblib>=1.4",
+  "matplotlib>=3.8",
+  "PyYAML>=6.0",
+  "pydantic>=2.7",
+  "typer>=0.12",
+  "rich>=13.7",
+  "torch>=2.3"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.5",
+  "ipykernel>=6.29"
+]
+vision = [
+  "opencv-python>=4.9",
+  "mediapipe>=0.10"
+]
+audio = [
+  "sounddevice>=0.4",
+  "librosa>=0.10"
+]
+ml = [
+  "torchaudio>=2.3"
+]
+
+[project.scripts]
+hri-turn-taking = "hri_turn_taking.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
