@@ -65,6 +65,63 @@ robot (Furhat) with closed-loop online evaluation**.
    - Latency budget for deployment: end-to-end < 500ms; account for camera (~33ms),
      feature extraction, inference, network bridge, Furhat TTS startup (200–400ms).
 
+## Implementation Status (updated 2026-06-11)
+
+Repo: github.com/LeGendZyx/hri-turn-taking (private), branch `main`.
+The multiparty VAP pipeline is implemented and verified end-to-end on
+synthetic data; real recordings are not yet available.
+
+### Core pipeline — `src/hri_turn_taking/vap/`
+- `labels.py` — VAP bin labels from gold per-participant VAD
+  (bins 0.2/0.6/1.2/2.0 s, active-ratio 0.5); p_now/p_future readout.
+- `model.py` — `MultipartyVAP`: Linear(input→64) projection → causal encoder
+  (2-layer Transformer default, GRU as low-cost comparison) → per-participant
+  × per-bin logits + auxiliary current-VAD head. ~100k params. Independent
+  per-bin BCE objective (multi-party simplification of the 256-class joint
+  VAP state space).
+- `dataset.py` — wide table → tensors, feature normalisation, sliding
+  windows; session-level splits only.
+- `trainer.py` — masked BCE (absent participant slots + truncated-horizon
+  frames excluded) with per-bin pos_weight, AdamW, early stopping; checkpoint
+  stores model config + normaliser + label config for reproduction. Chunked
+  full-session inference for sequences beyond the positional table.
+- `events.py` — shift/hold and shift-prediction event tests; shift score is
+  averaged over the silence gap (Ekstedt & Skantze convention — gap-onset
+  single-frame readout is near chance because addressee cues live in
+  gaze-target features and late-gap frames).
+- `policy.py` — dual-threshold p_now/p_future gated on the *floor holder*
+  (original Skantze & Irfan semantics; gating on max over all humans never
+  fires), with debouncing + refractory period.
+- `offline_demo.py` — predictive vs. reactive floor-entry latency comparison.
+
+### Data schema — `src/hri_turn_taking/data/multiparty.py`
+- Wide frame table at 25 fps, columns `P{i}_<feature>`, up to 4 slots with
+  `P{i}_present` masks (3-party sessions pad slot 4).
+- Gold tier: `P{i}_vad` — used ONLY for labels and event evaluation.
+- Robot-observable input tier: `P{i}_asd_prob`, `P{i}_mar`, `P{i}_gaze_robot`,
+  `P{i}_head_yaw_deg`, `P{i}_gazed_at` + global `doa_angle_deg`,
+  `array_energy`, `f0_proxy` (23 input dims).
+- Synthetic generator: features are *probabilistic noisy correlates* of the
+  underlying speech state with genuine anticipatory cues (turn-final prosodic
+  lowering, speaker gaze redirection to next speaker, pre-onset articulation),
+  gated by cue_reliability=0.7. Features must never be deterministic
+  functions of labels (an earlier scaffold had that leakage — do not refit).
+- Real data drop-in: produce this wide table from extracted features and feed
+  `vap-train` directly; only `input_dim` changes if features are added.
+
+### CLI (`hri-turn-taking` / `python -m hri_turn_taking`)
+- `vap-generate` / `vap-train` / `vap-demo` — core pipeline.
+- `generate-synthetic` / `train` / `predict` — legacy frame-level sklearn TRP
+  baseline, kept solely as an ablation comparison; do not extend it.
+
+Reference numbers on synthetic data (12×180 s sessions, 20 epochs, CPU):
+frame mAP ≈ 0.88, shift/hold AP ≈ 0.68, shift-prediction AP ≈ 0.72
+(ceiling limited by cue_reliability); predictive policy enters gaps in
+0.16–0.58 s while the 1.5 s silence baseline never enters.
+
+PyTorch is a core dependency (CPU build installed in `.venv`).
+Tests: `pytest` (18 tests, includes a causality test and a training smoke).
+
 ## Data Collection (in progress)
 
 - 3–4 human participants per session, open-ended collaborative discussion tasks.
@@ -129,4 +186,10 @@ robot (Furhat) with closed-loop online evaluation**.
 - Feature files: one parquet/npz per session per modality, aligned to 25 fps grid;
   column naming `<participant_id>_<feature>` (e.g. `P2_gaze_target`).
 - Ethics: raw audio/video must never leave the local machine or be committed to git.
-  Add data directories to .gitignore.
+  Data directories are gitignored (`data/*`, `models/*`, `outputs/*`, `logs/*`).
+- New modelling work goes in `src/hri_turn_taking/vap/`; the legacy sklearn TRP
+  path (`models/trainer.py`, `data/schema.py`) is frozen as an ablation baseline.
+- Evaluation must report balanced metrics + event-level tests, never raw
+  accuracy alone (heavy class imbalance).
+- `gh` CLI is installed at `C:\Program Files\GitHub CLI\gh.exe` and
+  authenticated as LeGendZyx; remote is `origin` (HTTPS).
