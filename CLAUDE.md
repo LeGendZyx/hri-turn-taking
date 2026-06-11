@@ -70,6 +70,8 @@ robot (Furhat) with closed-loop online evaluation**.
 Repo: github.com/LeGendZyx/hri-turn-taking (private), branch `main`.
 The multiparty VAP pipeline is implemented and verified end-to-end on
 synthetic data; real recordings are not yet available.
+Architecture diagram: `ARCHITECTURE.md` (repo root, Mermaid) — keep it in
+sync when `vap/model.py`, the policy thresholds, or the feature schema change.
 
 ### Core pipeline — `src/hri_turn_taking/vap/`
 - `labels.py` — VAP bin labels from gold per-participant VAD
