@@ -7,14 +7,18 @@ __pycache__/
 .mypy_cache/
 .ipynb_checkpoints/
 
-# Local data and generated outputs
-data/raw/*
-data/processed/*
-data/annotations/*
+# Local data — raw A/V, extracted features, and annotations are never committed.
+# Only .gitkeep placeholders (preserving the folder scaffolding) and a README are
+# tracked under data/; every actual data file is ignored at any depth.
+data/**
+!data/**/
+!data/**/.gitkeep
+!data/README.md
+
+# Generated artifacts — only the top-level .gitkeep placeholder is kept.
 outputs/*
 models/*
 logs/*
-
 !.gitkeep
 
 # Environment files
@@ -25,3 +29,6 @@ logs/*
 Thumbs.db
 .vscode/
 .idea/
+
+# Claude Code local files (settings.local.json, worktrees, etc.)
+.claude/
