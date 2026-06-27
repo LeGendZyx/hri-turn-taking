@@ -10,12 +10,10 @@ The project is organised as a research Python package for collecting multimodal 
 
 ```text
 configs/                 Experiment and runtime configuration
-data/                    Local datasets and annotations, ignored by git
+data/                    Local datasets and annotations, ignored by git (see data/README.md)
 docs/                    Notes, proposal summary, experiment protocol drafts
-notebooks/               Exploratory analysis
 outputs/                 Experiment outputs, ignored by git
-scripts/                 Convenience scripts
-src/hri_turn_taking/     Main Python package
+src/hri_turn_taking/     Main package: vap/ (core method) + legacy/ (frozen TRP ablation)
 tests/                   Lightweight tests for core feature logic
 ```
 

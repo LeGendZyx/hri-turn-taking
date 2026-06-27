@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
-from hri_turn_taking.features.fusion import FrameFeatures
-from hri_turn_taking.models.baseline import HeuristicTRPModel
+from hri_turn_taking.legacy.features.fusion import FrameFeatures
+from hri_turn_taking.legacy.models.baseline import HeuristicTRPModel
 
 
 @dataclass(frozen=True)

@@ -1,9 +1,9 @@
 import pandas as pd
 
-from hri_turn_taking.data.dataset import load_windowed_dataset
-from hri_turn_taking.data.synthetic import generate_synthetic_turn_taking_data
-from hri_turn_taking.models.inference import predict_trp_from_csv
-from hri_turn_taking.models.trainer import train_trp_classifier
+from hri_turn_taking.legacy.data.dataset import load_windowed_dataset
+from hri_turn_taking.legacy.data.synthetic import generate_synthetic_turn_taking_data
+from hri_turn_taking.legacy.models.inference import predict_trp_from_csv
+from hri_turn_taking.legacy.models.trainer import train_trp_classifier
 
 
 def test_synthetic_data_loads_as_windowed_dataset(tmp_path) -> None:

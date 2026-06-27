@@ -1,6 +1,6 @@
 import numpy as np
 
-from hri_turn_taking.audio.gcc_phat import doa_from_tdoa, estimate_tdoa_gcc_phat
+from hri_turn_taking.legacy.audio.gcc_phat import doa_from_tdoa, estimate_tdoa_gcc_phat
 
 
 def test_estimate_tdoa_gcc_phat_for_shifted_impulse() -> None:

@@ -4,14 +4,14 @@ import numpy as np
 import typer
 from rich.console import Console
 
-from hri_turn_taking.audio.gcc_phat import doa_from_tdoa, estimate_tdoa_gcc_phat
 from hri_turn_taking.config import ProjectConfig, load_config
-from hri_turn_taking.data.synthetic import save_synthetic_turn_taking_data
-from hri_turn_taking.features.fusion import FrameFeatures
-from hri_turn_taking.models.inference import predict_trp_from_csv
-from hri_turn_taking.models.trainer import train_trp_classifier
-from hri_turn_taking.realtime.pipeline import PredictiveTurnTakingPipeline
-from hri_turn_taking.vision.mouth import mouth_aspect_ratio
+from hri_turn_taking.legacy.audio.gcc_phat import doa_from_tdoa, estimate_tdoa_gcc_phat
+from hri_turn_taking.legacy.data.synthetic import save_synthetic_turn_taking_data
+from hri_turn_taking.legacy.features.fusion import FrameFeatures
+from hri_turn_taking.legacy.models.inference import predict_trp_from_csv
+from hri_turn_taking.legacy.models.trainer import train_trp_classifier
+from hri_turn_taking.legacy.realtime.pipeline import PredictiveTurnTakingPipeline
+from hri_turn_taking.legacy.vision.mouth import mouth_aspect_ratio
 
 app = typer.Typer(help="Predictive turn-taking HRI utilities.")
 console = Console()

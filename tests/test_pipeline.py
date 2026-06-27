@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from hri_turn_taking.features.fusion import FrameFeatures, stack_feature_window
-from hri_turn_taking.realtime.pipeline import PredictiveTurnTakingPipeline
-from hri_turn_taking.vision.mouth import mouth_aspect_ratio
+from hri_turn_taking.legacy.features.fusion import FrameFeatures, stack_feature_window
+from hri_turn_taking.legacy.realtime.pipeline import PredictiveTurnTakingPipeline
+from hri_turn_taking.legacy.vision.mouth import mouth_aspect_ratio
 
 
 def test_mouth_aspect_ratio_from_landmarks() -> None:

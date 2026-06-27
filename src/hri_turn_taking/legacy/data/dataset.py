@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from hri_turn_taking.data.schema import (
+from hri_turn_taking.legacy.data.schema import (
     DEFAULT_FEATURE_COLUMNS,
     TARGET_COLUMN,
     coerce_feature_types,

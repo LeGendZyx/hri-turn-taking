@@ -5,7 +5,7 @@ from pathlib import Path
 import joblib
 import pandas as pd
 
-from hri_turn_taking.data.dataset import build_window_matrix, load_frame_dataframe
+from hri_turn_taking.legacy.data.dataset import build_window_matrix, load_frame_dataframe
 
 
 def predict_trp_from_csv(

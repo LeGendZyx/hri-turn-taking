@@ -119,6 +119,9 @@ Ask the user before altering any of these.
 - `policy.py` — dual-threshold policy gated on the **floor holder** (original
   Skantze & Irfan semantics) with debouncing + refractory period.
 - `offline_demo.py` — predictive vs. reactive floor-entry latency comparison.
+- `reactive_baseline.py` — `SilenceBaseline`, the reactive fixed-silence baseline
+  the predictive policy is compared against (relocated out of `legacy/` — it is
+  core evaluation infrastructure, not the frozen TRP ablation).
 
 **Data schema — `src/hri_turn_taking/data/multiparty.py`:** wide frame table at
 25 fps, columns `P{i}_<feature>`, up to 4 slots with `P{i}_present` masks
@@ -127,14 +130,17 @@ Ask the user before altering any of these.
 `array_energy`, `f0_proxy` (**23 input dims**). `P{i}_vad` is gold tier — labels
 and event eval ONLY, never model input.
 
-**Frozen legacy ablation — do NOT extend.** The scikit-learn frame-level TRP path:
-`data/{schema,synthetic,dataset}.py`, `models/{baseline,trainer,inference}.py`,
-`audio/gcc_phat.py`, `vision/mouth.py`, `features/fusion.py`,
-`evaluation/metrics.py`, `realtime/pipeline.py`. Kept solely as a low-cost
-comparison baseline.
+**Frozen legacy ablation — do NOT extend.** The scikit-learn frame-level TRP path
+lives under `src/hri_turn_taking/legacy/`:
+`legacy/data/{schema,synthetic,dataset}.py`,
+`legacy/models/{baseline,trainer,inference}.py`, `legacy/audio/gcc_phat.py`,
+`legacy/vision/mouth.py`, `legacy/features/fusion.py`,
+`legacy/evaluation/metrics.py`, `legacy/realtime/pipeline.py`. Kept solely as a
+low-cost comparison baseline. (`SilenceBaseline` was moved out to
+`vap/reactive_baseline.py` — it is core eval, not legacy.)
 
-**Shared / other:** `cli.py`, `config.py`, `configs/default.yaml`,
-`scripts/run_demo.py`, `tests/`, `docs/`. Architecture diagram: **`ARCHITECTURE.md`**
+**Shared / other:** `cli.py`, `config.py`, `configs/default.yaml`, `tests/`,
+`docs/`. Architecture diagram: **`ARCHITECTURE.md`**
 (Mermaid) — keep it in sync with `vap/model.py`, the policy thresholds, and the
 feature schema.
 

@@ -14,8 +14,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from hri_turn_taking.data.dataset import WindowedDataset, load_windowed_dataset
-from hri_turn_taking.data.schema import DEFAULT_FEATURE_COLUMNS, TARGET_COLUMN
+from hri_turn_taking.legacy.data.dataset import WindowedDataset, load_windowed_dataset
+from hri_turn_taking.legacy.data.schema import DEFAULT_FEATURE_COLUMNS, TARGET_COLUMN
 
 
 @dataclass(frozen=True)

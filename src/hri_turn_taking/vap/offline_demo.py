@@ -11,7 +11,6 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from hri_turn_taking.models.baseline import SilenceBaseline
 from hri_turn_taking.vap.dataset import FeatureNormalizer, SessionTensors
 from hri_turn_taking.vap.events import extract_shift_hold_events
 from hri_turn_taking.vap.labels import DEFAULT_LABEL_CONFIG, VAPLabelConfig
@@ -21,6 +20,7 @@ from hri_turn_taking.vap.policy import (
     DualThresholdPolicy,
     PolicyConfig,
 )
+from hri_turn_taking.vap.reactive_baseline import SilenceBaseline
 from hri_turn_taking.vap.trainer import predict_session_probabilities
 
 
