@@ -135,7 +135,7 @@ lives under `src/hri_turn_taking/legacy/`:
 `legacy/data/{schema,synthetic,dataset}.py`,
 `legacy/models/{baseline,trainer,inference}.py`, `legacy/audio/gcc_phat.py`,
 `legacy/vision/mouth.py`, `legacy/features/fusion.py`,
-`legacy/evaluation/metrics.py`, `legacy/realtime/pipeline.py`. Kept solely as a
+`legacy/realtime/pipeline.py`. Kept solely as a
 low-cost comparison baseline. (`SilenceBaseline` was moved out to
 `vap/reactive_baseline.py` — it is core eval, not legacy.)
 
