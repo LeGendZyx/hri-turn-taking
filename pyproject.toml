@@ -31,6 +31,9 @@ dev = [
   "ruff>=0.5",
   "ipykernel>=6.29"
 ]
+annotation = [
+  "opencv-python>=4.9"
+]
 vision = [
   "opencv-python>=4.9",
   "mediapipe>=0.10"
@@ -51,7 +54,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 
 [tool.ruff]
 line-length = 100

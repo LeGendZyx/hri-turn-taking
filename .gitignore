@@ -21,6 +21,20 @@ models/*
 logs/*
 !.gitkeep
 
+# Local team exports and reproducible scratch products. These directories may
+# contain participant-level derived evidence and must never be blanket-added.
+gaze_features_export/
+facial_features_export/
+tmp/
+
+# Dissertation authoring, presentation exports, and local recovery snapshots.
+# These are intentionally separate from the publishable software repository.
+/report/
+/report.zip
+/output/
+/snapshots/
+/docs/progress_meeting_*
+
 # Environment files
 .env
 
@@ -32,3 +46,7 @@ Thumbs.db
 
 # Claude Code local files (settings.local.json, worktrees, etc.)
 .claude/
+
+# Local agent/runtime state
+.agents/
+.codex/

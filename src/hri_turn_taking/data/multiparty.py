@@ -6,7 +6,9 @@ columns named ``P{i}_<feature>`` per the project convention.
 Feature tiers (CLAUDE.md design decision #2):
 - Gold tier (labels / offline eval only): ``P{i}_vad`` from lavalier mics.
 - Robot-observable tier (model input): per-face ASD probability, MAR,
-  gaze-to-robot score, head yaw, plus global mic-array features.
+  gaze-to-robot score, head yaw, observation validity/quality, plus global
+  acoustic features (combined-mix-derived on real data; the DoA column only
+  carries real values in the synthetic / mic-array-ablation pipeline).
 
 The synthetic generator simulates 3-4 party conversations with turn shifts,
 holds, overlaps and backchannels. Robot-observable features are *noisy,
@@ -26,9 +28,54 @@ import pandas as pd
 
 MAX_PARTICIPANTS = 4
 
-GLOBAL_FEATURE_COLUMNS = ["doa_angle_deg", "array_energy", "f0_proxy"]
-PARTICIPANT_FEATURE_NAMES = ["asd_prob", "mar", "gaze_robot", "head_yaw_deg", "gazed_at"]
+# The deadline A/H/A+H matrix and every v4 development checkpoint use v2.
+# Keep it as the default forever: the nullable Gaze experiment is a parallel,
+# explicitly selected schema rather than a migration of historical artifacts.
+FEATURE_SCHEMA_V2 = "multiparty_v2"
+FEATURE_SCHEMA_V3_GAZE_VALIDITY = "multiparty_v3_gaze_validity"
+DEFAULT_FEATURE_SCHEMA = FEATURE_SCHEMA_V2
+
+GLOBAL_FEATURE_COLUMNS = ["doa_angle_deg", "array_energy", "f0_proxy", "voiced"]
+# pose_valid: per-frame 0/1 flag — 1 when the head-pose observation for this
+# slot is real, 0 when the tracker lost the face (features are zero-filled
+# there). Robot-observable at runtime (Furhat knows when it cannot see a face);
+# lets the model distinguish "missing observation" from a genuine 0° yaw.
+# P{i}_present stays STATIC per session ("this participant exists") — tracking
+# dropouts must not fake participants leaving the conversation (Codex R1.1-1).
+# pose_quality: per-frame continuous [0, 1] observation quality (Codex R1.2-5
+# ruling): for R = valid-target-member fraction backing the centroid bearing,
+# for non-R = 1 iff its single target (R) is validly observed. Kept separate
+# from the BINARY pose_valid flag — continuous quality must not be overloaded
+# into the validity bit.
+PARTICIPANT_FEATURE_NAMES = ["asd_prob", "mar", "gaze_robot", "head_yaw_deg", "gazed_at",
+                             "pose_valid", "pose_quality"]
+PARTICIPANT_FEATURE_NAMES_V3_GAZE_VALIDITY = [
+    "asd_prob",
+    "mar",
+    "gaze_robot",
+    "gaze_robot_valid",
+    "head_yaw_deg",
+    "gazed_at",
+    "pose_valid",
+    "pose_quality",
+]
 METADATA_COLUMNS = ["session_id", "timestamp_s"]
+
+
+def participant_feature_names(feature_schema: str = DEFAULT_FEATURE_SCHEMA) -> list[str]:
+    """Return an isolated schema's participant feature order.
+
+    A copy is returned so callers cannot mutate the module-level contract.
+    """
+
+    if feature_schema == FEATURE_SCHEMA_V2:
+        return list(PARTICIPANT_FEATURE_NAMES)
+    if feature_schema == FEATURE_SCHEMA_V3_GAZE_VALIDITY:
+        return list(PARTICIPANT_FEATURE_NAMES_V3_GAZE_VALIDITY)
+    raise ValueError(
+        f"Unknown feature_schema {feature_schema!r}; choose {FEATURE_SCHEMA_V2!r} "
+        f"or {FEATURE_SCHEMA_V3_GAZE_VALIDITY!r}"
+    )
 
 
 def participant_column(index: int, feature: str) -> str:
@@ -44,29 +91,167 @@ def present_columns(max_participants: int = MAX_PARTICIPANTS) -> list[str]:
     return [participant_column(i + 1, "present") for i in range(max_participants)]
 
 
-def input_feature_columns(max_participants: int = MAX_PARTICIPANTS) -> list[str]:
+def input_feature_columns(
+    max_participants: int = MAX_PARTICIPANTS,
+    *,
+    feature_schema: str = DEFAULT_FEATURE_SCHEMA,
+) -> list[str]:
     """Robot-observable model input columns (never includes gold VAD)."""
+    feature_names = participant_feature_names(feature_schema)
     columns = []
     for i in range(max_participants):
-        columns.extend(participant_column(i + 1, name) for name in PARTICIPANT_FEATURE_NAMES)
+        columns.extend(participant_column(i + 1, name) for name in feature_names)
     columns.extend(GLOBAL_FEATURE_COLUMNS)
     return columns
 
 
 def validate_multiparty_dataframe(
-    frame_df: pd.DataFrame, max_participants: int = MAX_PARTICIPANTS
+    frame_df: pd.DataFrame,
+    max_participants: int = MAX_PARTICIPANTS,
+    *,
+    feature_schema: str = DEFAULT_FEATURE_SCHEMA,
 ) -> None:
+    if feature_schema == FEATURE_SCHEMA_V2:
+        v3_only = [
+            participant_column(index, "gaze_robot_valid")
+            for index in range(1, max_participants + 1)
+            if participant_column(index, "gaze_robot_valid") in frame_df.columns
+        ]
+        if v3_only:
+            raise ValueError(
+                "Multiparty schema v2 must not contain schema-v3-only columns: "
+                f"{v3_only}; select feature_schema={FEATURE_SCHEMA_V3_GAZE_VALIDITY!r} "
+                "explicitly so Gaze missingness cannot be ignored"
+            )
     required = [
         *METADATA_COLUMNS,
         *vad_columns(max_participants),
         *present_columns(max_participants),
-        *input_feature_columns(max_participants),
+        *input_feature_columns(max_participants, feature_schema=feature_schema),
     ]
     missing = [column for column in required if column not in frame_df.columns]
     if missing:
         raise ValueError(f"Multiparty dataset is missing required columns: {missing}")
     if frame_df.empty:
         raise ValueError("Multiparty dataset must contain at least one row")
+
+    session_ids = frame_df["session_id"]
+    if session_ids.isna().any() or session_ids.map(
+        lambda value: not isinstance(value, str) or not value.strip()
+    ).any():
+        raise ValueError("Multiparty dataset session_id values must be non-empty strings")
+
+    # value-level guarantees (Codex R1.2-1): downstream takes presence per
+    # session as a single static row, and attention/loss assume binary masks —
+    # a dynamic or fractional presence column must fail here, not be silently
+    # crushed later
+    # every model input, gold VAD and timestamp must be finite — NaN/Inf must
+    # fail the final gate, not surface as non-finite tensors (Codex R1.3-4)
+    numeric_required = [
+        "timestamp_s",
+        *vad_columns(max_participants),
+        *input_feature_columns(max_participants, feature_schema=feature_schema),
+    ]
+    non_finite = [
+        column
+        for column in numeric_required
+        if not np.isfinite(frame_df[column].to_numpy(dtype=float)).all()
+    ]
+    if non_finite:
+        raise ValueError(f"Multiparty dataset has NaN/Inf in columns: {non_finite}")
+    voiced = frame_df["voiced"].to_numpy(dtype=float)
+    if not np.isin(voiced, (0.0, 1.0)).all():
+        raise ValueError("voiced must be binary 0/1 (global F0-validity flag)")
+    f0_proxy = frame_df["f0_proxy"].to_numpy(dtype=float)
+    if (f0_proxy[voiced == 0.0] != 0.0).any():
+        raise ValueError(
+            "f0_proxy must be exactly zero where voiced=0; unvoiced frames cannot "
+            "carry a stale or ambiguous pitch value"
+        )
+    for i in range(max_participants):
+        present = frame_df[participant_column(i + 1, "present")].to_numpy(dtype=float)
+        if not np.isin(present, (0.0, 1.0)).all():
+            raise ValueError(f"P{i + 1}_present must be binary 0/1 (slot-exists mask)")
+        vad = frame_df[participant_column(i + 1, "vad")].to_numpy(dtype=float)
+        if not np.isin(vad, (0.0, 1.0)).all():
+            raise ValueError(f"P{i + 1}_vad must be binary 0/1 (gold voice activity)")
+        if (vad[present == 0.0] != 0.0).any():
+            raise ValueError(
+                f"P{i + 1}_vad must be zero on frames where present=0 — "
+                "absent slots cannot carry gold voice activity"
+            )
+        pose_valid = frame_df[participant_column(i + 1, "pose_valid")].to_numpy(dtype=float)
+        if not np.isin(pose_valid, (0.0, 1.0)).all():
+            raise ValueError(f"P{i + 1}_pose_valid must be binary 0/1 (per-frame validity)")
+        pose_quality = frame_df[participant_column(i + 1, "pose_quality")].to_numpy(dtype=float)
+        if not (np.isfinite(pose_quality).all() and
+                (pose_quality >= 0.0).all() and (pose_quality <= 1.0).all()):
+            raise ValueError(f"P{i + 1}_pose_quality must be finite within [0, 1]")
+        if (pose_valid > present).any() or (pose_quality > present).any():
+            raise ValueError(
+                f"P{i + 1} has pose_valid/pose_quality on frames where present=0 — "
+                "absent slots cannot carry valid observations"
+            )
+        yaw = frame_df[participant_column(i + 1, "head_yaw_deg")].to_numpy(dtype=float)
+        if (yaw[pose_valid == 0.0] != 0.0).any():
+            raise ValueError(
+                f"P{i + 1}_head_yaw_deg is non-zero on frames with pose_valid=0 — "
+                "invalid observations must be zero-filled, not carry stale values"
+            )
+        if feature_schema == FEATURE_SCHEMA_V3_GAZE_VALIDITY:
+            gaze_valid = frame_df[
+                participant_column(i + 1, "gaze_robot_valid")
+            ].to_numpy(dtype=float)
+            gaze_value = frame_df[participant_column(i + 1, "gaze_robot")].to_numpy(
+                dtype=float
+            )
+            if not np.isin(gaze_valid, (0.0, 1.0)).all():
+                raise ValueError(
+                    f"P{i + 1}_gaze_robot_valid must be binary 0/1 "
+                    "(nullable Gaze observation-validity bit)"
+                )
+            if not np.isin(gaze_value, (0.0, 1.0)).all():
+                raise ValueError(
+                    f"P{i + 1}_gaze_robot must be binary 0/1 in the Gaze-validity schema"
+                )
+            if (gaze_valid > present).any():
+                raise ValueError(
+                    f"P{i + 1}_gaze_robot_valid is 1 where present=0 — absent slots "
+                    "cannot carry valid Gaze observations"
+                )
+            if (gaze_value[gaze_valid == 0.0] != 0.0).any():
+                raise ValueError(
+                    f"P{i + 1}_gaze_robot must be exactly zero where "
+                    "gaze_robot_valid=0; the validity bit, not the filled value, "
+                    "distinguishes missingness"
+                )
+            if i == 0 and (gaze_valid != 0.0).any():
+                raise ValueError(
+                    "P1/R gaze_robot_valid must remain 0: the delivered Gaze export "
+                    "does not observe the robot-player's gaze"
+                )
+    for session_id, group in frame_df.groupby("session_id", sort=False):
+        timestamps = group["timestamp_s"].to_numpy(dtype=float)
+        differences = np.diff(timestamps)
+        if (differences <= 0.0).any():
+            raise ValueError(
+                f"timestamp_s must be strictly increasing and unique within session "
+                f"{session_id!r}"
+            )
+        if differences.size and not np.allclose(
+            differences, 1.0 / 25.0, rtol=0.0, atol=1e-6
+        ):
+            raise ValueError(
+                f"timestamp_s must use the canonical 25 Hz grid (0.04 s steps) within "
+                f"session {session_id!r}"
+            )
+        for i in range(max_participants):
+            column = participant_column(i + 1, "present")
+            if group[column].nunique() > 1:
+                raise ValueError(
+                    f"{column} varies within session {session_id!r} — present is the "
+                    "STATIC slot-exists mask; per-frame dropouts belong in P{i}_pose_valid"
+                )
 
 
 @dataclass(frozen=True)
@@ -119,7 +304,9 @@ def save_multiparty_dataset(
     return frame_df
 
 
-def load_multiparty_dataset(path: str | Path) -> pd.DataFrame:
+def load_multiparty_dataset(
+    path: str | Path, *, feature_schema: str = DEFAULT_FEATURE_SCHEMA
+) -> pd.DataFrame:
     dataset_path = Path(path)
     if not dataset_path.exists():
         raise FileNotFoundError(f"Dataset not found: {dataset_path}")
@@ -127,7 +314,7 @@ def load_multiparty_dataset(path: str | Path) -> pd.DataFrame:
         frame_df = pd.read_parquet(dataset_path)
     else:
         frame_df = pd.read_csv(dataset_path)
-    validate_multiparty_dataframe(frame_df)
+    validate_multiparty_dataframe(frame_df, feature_schema=feature_schema)
     return frame_df
 
 
@@ -323,7 +510,12 @@ def _features_from_state(
             gazed_at + rng.normal(0.0, 0.08, n_frames), 0.0, 1.0
         )
 
-    # --- global mic-array features -----------------------------------------
+        # synthetic cameras never lose a face; real intake writes 0 on dropouts
+        features[participant_column(i + 1, "pose_valid")] = np.ones(n_frames)
+        features[participant_column(i + 1, "pose_quality")] = np.ones(n_frames)
+
+    # --- global acoustic features (mic-array only in this synthetic pipeline;
+    # real data sources energy/f0 from the combined mix, DoA stays inert) ----
     any_speech = vad.sum(axis=1) > 0
     dominant = np.argmax(vad + rng.normal(0.0, 0.05, vad.shape), axis=1)
     doa = np.where(any_speech, angles[dominant] + rng.normal(0.0, 5.0, n_frames), 0.0)
@@ -333,8 +525,15 @@ def _features_from_state(
     energy = np.where(any_speech, rng.normal(0.8, 0.1, n_frames), rng.normal(0.08, 0.04, n_frames))
     features["array_energy"] = np.clip(energy * (1.0 - 0.35 * final_lowering), 0.0, 1.2)
 
-    f0 = np.where(any_speech, rng.normal(1.0, 0.12, n_frames), 0.0)
-    features["f0_proxy"] = np.clip(f0 * (1.0 - 0.45 * final_lowering), 0.0, 1.5)
+    # A separate validity flag removes the old collision between an unvoiced
+    # frame and a genuinely voiced 100 Hz frame (both mapped to f0_proxy=0).
+    # False positives/negatives keep this robot-observable detector output a
+    # noisy correlate rather than a deterministic copy of gold VAD.
+    voiced_probability = np.where(any_speech, 0.93, 0.04)
+    voiced = rng.random(n_frames) < voiced_probability
+    features["voiced"] = voiced.astype(float)
+    f0 = rng.normal(0.65, 0.30, n_frames) * (1.0 - 0.45 * final_lowering)
+    features["f0_proxy"] = np.where(voiced, np.clip(f0, -1.5, 2.0), 0.0)
 
     return features
 

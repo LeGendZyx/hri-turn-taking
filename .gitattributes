@@ -1,0 +1,24 @@
+* text=auto
+
+# Reproducibility contracts hash implementation bytes. Keep text checkouts
+# platform-independent so Windows CRLF conversion cannot invalidate them.
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.txt text eol=lf
+.env.example text eol=lf
+
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.wav binary
+*.mp4 binary
+*.avi binary
+*.pt binary
+*.pth binary
+*.npz binary
+*.zip binary

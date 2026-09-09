@@ -1,3 +1,7 @@
+# NOTE: the audio/vision/turn_taking(trp_threshold)/model/training sections below
+# configure the FROZEN legacy sklearn TRP ablation only (do not extend).
+# The core multiparty VAP pipeline (vap-generate/vap-train/vap-demo) takes its
+# options as CLI flags; silence_baseline_seconds is shared by the reactive baseline.
 project:
   name: predictive_turn_taking_hri
   random_seed: 42

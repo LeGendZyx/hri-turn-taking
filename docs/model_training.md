@@ -1,4 +1,9 @@
-# Model Training Framework
+# Model Training Framework (FROZEN LEGACY ABLATION)
+
+> **This documents the frozen legacy sklearn TRP path** (`src/hri_turn_taking/legacy/`),
+> kept only as a low-cost comparison baseline — do not extend it (AGENTS.md §5/§9).
+> The core method is the multiparty VAP pipeline: `hri-turn-taking vap-generate |
+> vap-train | vap-demo` (see AGENTS.md §5–6 and `ARCHITECTURE.md`).
 
 ## Purpose
 

@@ -1,23 +1,52 @@
-# data/
+# Local data directory
 
-Local datasets for the project. **Everything in this folder is git-ignored**
-except this README and the `.gitkeep` placeholders (see the repo `.gitignore`):
-raw A/V, extracted features, and annotations must never be committed or leave the
-local machine (ethics — see `AGENTS.md` §9).
+This directory is a local scaffold only. The research corpus contains
+human-participant audio, video, annotations, and derived participant-level
+features, so no data files are distributed through this repository.
 
-## Layout
+Git tracks this README and empty `.gitkeep` placeholders. Everything else
+below `data/` is ignored.
 
-| Subdir | Contents |
+| Directory | Local contents |
 |---|---|
-| `raw/` | Untouched recordings: monochrome + RGB-D video, lavalier + ReSpeaker-array audio, calibration data. |
-| `processed/` | Derived, model-ready artifacts: the 25 fps wide feature table (`P{i}_<feature>` schema) and synthetic datasets. |
-| `annotations/` | ELAN annotation files, including the required overlap-type tier (`backchannel` vs `competitive`). |
+| `raw/` | Original recordings and calibration assets |
+| `annotations/` | Identity, transcript, timing, and review artefacts |
+| `processed/` | Synthetic data and locally assembled model-ready tables |
 
-## Regenerating synthetic data
+## Synthetic data
 
-The processed CSVs are reproducible from the CLI and are not stored in git:
+Synthetic datasets can be regenerated without private inputs:
 
 ```powershell
-hri-turn-taking vap-generate          # -> processed/multiparty_synthetic.csv (VAP schema)
-hri-turn-taking generate-synthetic    # -> processed/synthetic_turn_taking.csv (legacy ablation)
+hri-turn-taking vap-generate
+hri-turn-taking generate-synthetic
 ```
+
+The first command creates the participant-wise VAP schema. The second creates
+the frozen legacy frame-level TRP ablation dataset.
+
+## Real-data boundary
+
+Real sessions are represented on a 25 Hz grid using columns such as
+`P1_head_yaw_deg`, `P1_pose_valid`, and `P1_vad`. Participant VAD is gold-tier:
+it may define targets and evaluation events but must never be selected as an
+input feature.
+
+The real-data path is deliberately fail-closed:
+
+```powershell
+hri-turn-taking vap-intake <delivery-dir>
+hri-turn-taking vap-assemble <intake.csv> <assembled.csv> --feature <feature.csv>
+hri-turn-taking vap-audit --data <assembled-file-or-directory> --data-kind real --require-ready
+```
+
+Each locally supplied feature file needs the provenance manifest required by
+the relevant contract under `docs/`. Intake and assembly verify participant
+mapping, time alignment, exact keys, source hashes, column ownership, causal
+feature declarations, and readiness for the selected feature set. Missing real
+observations must remain explicitly missing or invalid; they must not be
+silently converted into genuine zero-valued measurements.
+
+Access to the corpus and its manifests must be obtained through the project's
+authorised data-governance process. A clone of this repository alone is not
+sufficient to run the formal real-data experiments.

@@ -1,14 +1,19 @@
-"""Robot floor-taking policy on top of VAP outputs.
+"""Robot floor-taking policies on top of VAP outputs.
 
-Implements the dual-threshold p_now / p_future strategy (Skantze & Irfan,
-HRI 2025; CLAUDE.md decision #6) instead of a single P(TRP) threshold:
+Two dual-threshold p_now / p_future entry modes (Skantze & Irfan, HRI 2025;
+CLAUDE.md decision #6) instead of a single P(TRP) threshold:
 
-- p_now: will any human be speaking in the near bins (~0-0.6 s)?
-- p_future: will any human be speaking in the later bins (~0.6-2 s)?
+- ``DualThresholdPolicy`` (floor-holder gated): enter once the current
+  holder's p_now / p_future both stay *below* their thresholds — the holder
+  has yielded.
+- ``DemonstrationPolicy`` (demonstration driven): enter once the *robot
+  slot's own* p_now / p_future both rise *above* their thresholds — the model
+  predicts that a human in the robot's position (the corpus' role-player)
+  would be speaking now and would sustain the turn.
 
-The robot enters the floor only when both stay below their thresholds for a
-minimum number of consecutive frames (debouncing), and a refractory period
-suppresses immediate re-triggering after a take-turn decision.
+Both debounce over consecutive frames and apply a refractory period after a
+take-turn decision. Which mode drives the live robot is an open choice; the
+offline demo compares them against the demonstrator's own entries.
 """
 
 from __future__ import annotations
@@ -115,3 +120,71 @@ class DualThresholdPolicy:
         self._consecutive_clear = 0
         self._refractory_remaining = self.config.refractory_frames
         return PolicyDecision(True, p_now_max, p_future_max, "floor_open")
+
+
+DEFAULT_DEMONSTRATION_CONFIG = PolicyConfig(now_threshold=0.5, future_threshold=0.5)
+
+
+class DemonstrationPolicy:
+    """Demonstration-driven floor entry: act when the model predicts that the
+    *robot slot itself* would be speaking.
+
+    The real corpus contains a human role-playing the robot, so the robot
+    slot's future-activity prediction reads as "would a human in the robot's
+    position speak now". Entry requires *both* readouts to exceed their
+    thresholds — an imminent (p_now) and sustained (p_future) turn — which
+    naturally skips predicted backchannels. The reported decision carries the
+    robot slot's p_now / p_future in the ``p_now_max`` / ``p_future_max``
+    fields.
+    """
+
+    def __init__(
+        self,
+        config: PolicyConfig = DEFAULT_DEMONSTRATION_CONFIG,
+        label_config: VAPLabelConfig = DEFAULT_LABEL_CONFIG,
+    ) -> None:
+        self.config = config
+        self.label_config = label_config
+        self._consecutive_active = 0
+        self._refractory_remaining = 0
+
+    def reset(self) -> None:
+        self._consecutive_active = 0
+        self._refractory_remaining = 0
+
+    def update(
+        self,
+        bin_probabilities: np.ndarray,
+        *,
+        robot_slot: int,
+        robot_has_intent: bool,
+        present: np.ndarray | None = None,
+    ) -> PolicyDecision:
+        """bin_probabilities: (n_participants, n_bins) for the current frame."""
+        probs = np.asarray(bin_probabilities, dtype=float)
+        p_now, p_future = p_now_p_future(probs, self.label_config)
+        p_now_robot = float(p_now[robot_slot])
+        p_future_robot = float(p_future[robot_slot])
+        if present is not None and float(np.asarray(present)[robot_slot]) <= 0:
+            return PolicyDecision(False, p_now_robot, p_future_robot, "robot_slot_absent")
+
+        if self._refractory_remaining > 0:
+            self._refractory_remaining -= 1
+            return PolicyDecision(False, p_now_robot, p_future_robot, "refractory")
+
+        wants_floor = (
+            p_now_robot > self.config.now_threshold
+            and p_future_robot > self.config.future_threshold
+        )
+        self._consecutive_active = self._consecutive_active + 1 if wants_floor else 0
+
+        if not robot_has_intent:
+            return PolicyDecision(False, p_now_robot, p_future_robot, "no_robot_intent")
+        if not wants_floor:
+            return PolicyDecision(False, p_now_robot, p_future_robot, "awaiting_demonstration")
+        if self._consecutive_active < self.config.min_consecutive_frames:
+            return PolicyDecision(False, p_now_robot, p_future_robot, "debouncing")
+
+        self._consecutive_active = 0
+        self._refractory_remaining = self.config.refractory_frames
+        return PolicyDecision(True, p_now_robot, p_future_robot, "demonstration_entry")
